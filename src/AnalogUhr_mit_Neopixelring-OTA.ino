@@ -1,7 +1,9 @@
 // Analoguhr mit Neopixelring
 
 #include <Arduino.h>
+#include <ArduinoOTA.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
 #include <FastLED.h>
 #include <TimeLib.h>
 #include <WiFiUdp.h>
@@ -13,11 +15,12 @@
 #define NUM_LEDS 12
 
 //#define DATA_PIN 5 // for WEMOS-D1
-#define DATA_PIN 2 // for ESP-01
+#define DATA_PIN 0 // for ESP-01
 CRGB leds[NUM_LEDS];
 
 const char *ssid = "QUINGDOM";
 const char *password = "DJJBXRDD";
+const char *id = "AnalogUhr"; // Hostname for OTA
 
 // const char* mqtt_server = "192.168.0.20";
 
@@ -43,6 +46,38 @@ void setup() {
     Serial.print(".");
   }
 
+  ArduinoOTA.setHostname(id);
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+
+    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using
+    // SPIFFS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR)
+      Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR)
+      Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR)
+      Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR)
+      Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR)
+      Serial.println("End Failed");
+  });
+
+  ArduinoOTA.begin();
+
   Serial.print("IP number assigned by DHCP is ");
   Serial.println(WiFi.localIP());
   Serial.println("Starting UDP");
@@ -52,7 +87,7 @@ void setup() {
   Serial.println("waiting for sync");
   setSyncProvider(getNtpTime);
 
-  cicle(4);
+  cicle(2);
   Blink(2);
 }
 
@@ -63,6 +98,8 @@ int prev_min;
 int min_buf;
 
 void loop() {
+
+  ArduinoOTA.handle(); // OTA-Stuff
 
   if (prev_hour != hour() || timeStatus() != timeSet) {
     setSyncProvider(getNtpTime);
@@ -133,7 +170,6 @@ void showtime() {
     FastLED.show();
   }
 }
-
 /*-------- NTP code ----------*/
 
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
